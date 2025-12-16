@@ -1,5 +1,9 @@
 ---
 import Default from '@astrojs/starlight/components/ThemeProvider.astro';
+import type { Props } from '@astrojs/starlight/props';
+
+type ThemeProps = Props;
+const props = Astro.props as ThemeProps;
 ---
 
 <script is:inline>
@@ -11,4 +15,4 @@ import Default from '@astrojs/starlight/components/ThemeProvider.astro';
   }
 </script>
 
-<Default {...Astro.props}><slot /></Default>
+<Default {...props}><slot /></Default>
