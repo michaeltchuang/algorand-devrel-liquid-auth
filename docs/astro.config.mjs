@@ -15,6 +15,21 @@ export default defineConfig({
     server: {
       https: true,
     },
+    build: {
+      rollupOptions: {
+        external: [
+          '@algorandfoundation/liquid-client/signal',
+          '@algorandfoundation/liquid-client/encoding',
+          '@algorandfoundation/provider'
+        ]
+      }
+    },
+    ssr: {
+      noExternal: [
+        '@algorandfoundation/liquid-client',
+        '@algorandfoundation/provider'
+      ]
+    }
   },
   site: 'https://liquidauth.com',
   trailingSlash: 'never',

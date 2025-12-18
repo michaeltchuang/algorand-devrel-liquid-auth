@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppService } from '../app.service.js';
 import {
@@ -16,6 +16,7 @@ import nacl from 'tweetnacl';
 import { AlgodService } from '../algod/algod.service.js';
 @Injectable()
 export class AttestationService {
+  private readonly logger = new Logger(AttestationService.name);
   encoder: TextEncoder = new TextEncoder();
   constructor(
     private appService: AppService,
@@ -29,11 +30,12 @@ export class AttestationService {
     signature: string,
     address: string,
   ) {
+    const challengeBytes = fromBase64Url(challenge);
+    const signatureBytes = fromBase64Url(signature);
+
     if (type === 'algorand') {
-      // Decode
+      // Ed25519 signature verification
       const publicKeyBytes = decodeAddress(address);
-      const signatureBytes = fromBase64Url(signature);
-      const challengeBytes = fromBase64Url(challenge);
       const valid = nacl.sign.detached.verify(
         challengeBytes,
         signatureBytes,
@@ -60,6 +62,45 @@ export class AttestationService {
           signatureBytes,
           authPublicKey,
         );
+      }
+    } else if (type === 'falcon-1024') {
+      // Falcon-1024 post-quantum signature verification
+      try {
+        // Lazy load falcon-1024 to avoid WASM loading issues at startup
+        const { verifyCompressed: verifyFalconCompressed } = await import('falcon-1024');
+        
+        const publicKeyBytes = decodeAddress(address);
+        
+        // Use falcon-1024-ts library for verification
+        const isValid = verifyFalconCompressed(
+          publicKeyBytes,
+          signatureBytes,
+          challengeBytes
+        );
+        
+        if (isValid) return true;
+        
+        // Check if the account is rekeyed to another Falcon key
+        const accountInfo = await algod
+          .accountInformation(address)
+          .exclude('all')
+          .do();
+
+        if (!accountInfo['auth-addr']) {
+          return false;
+        }
+
+        const authPublicKey = decodeAddress(accountInfo['auth-addr']);
+
+        // Validate with rekeyed Falcon public key
+        return verifyFalconCompressed(
+          authPublicKey,
+          signatureBytes,
+          challengeBytes
+        );
+      } catch (error) {
+        this.logger.error('Falcon-1024 verification error:', error);
+        return false;
       }
     }
     return false;
@@ -127,7 +168,7 @@ export class AttestationService {
       typeof credential.clientExtensionResults.liquid !== 'undefined';
     // Check for extension results
     if (isLiquid && verified) {
-      // Verify the signature
+      // Verify the Algorand signature (supports both Ed25519 and Falcon-1024)
       verified = await this.verify(
         this.algodService,
         credential.clientExtensionResults.liquid.type,

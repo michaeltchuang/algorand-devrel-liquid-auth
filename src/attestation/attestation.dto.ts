@@ -13,7 +13,7 @@ export type AttestationCredentialJSONDto = RegistrationResponseJSON & {
 
 export type LiquidAuthClientExtensionResults = {
   liquid: {
-    type: 'algorand';
+    type: 'algorand' | 'falcon-1024';
     signature: string;
     address: string;
 
