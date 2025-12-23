@@ -16,7 +16,7 @@ import {
 } from "@algorandfoundation/provider";
 import { fromResult } from "../hooks/provider.ts";
 
-const url = import.meta.env.PUBLIC_LIQUID_ORIGIN || "liquid-auth.onrender.com";
+const url = import.meta.env.PUBLIC_LIQUID_ORIGIN || "michaeltchuang.ngrok.dev";
 const INITIAL = "Initializing 🚀";
 const PEER_CONNECTED = "Peer connected 🎉";
 const SENDING_TRANSACTION = "Requesting Signature 📲";
