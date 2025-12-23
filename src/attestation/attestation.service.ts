@@ -153,10 +153,11 @@ export class AttestationService {
     const expectedRPID = this.configService.get<string>('hostname');
 
     // Validate the passkey
+    // For Android, we accept any of the configured fingerprints
     const verifiedAttestation = await verifyRegistrationResponse({
       response: credential,
       expectedChallenge,
-      expectedOrigin,
+      expectedOrigin: Array.isArray(expectedOrigin) ? expectedOrigin : [expectedOrigin],
       expectedRPID,
     });
     const { registrationInfo } = verifiedAttestation;

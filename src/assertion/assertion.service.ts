@@ -68,7 +68,7 @@ export class AssertionService {
     const verification = await verifyAuthenticationResponse({
       response: credential,
       expectedChallenge: challenge,
-      expectedOrigin,
+      expectedOrigin: Array.isArray(expectedOrigin) ? expectedOrigin : [expectedOrigin],
       expectedRPID,
       credential: {
         publicKey: fromBase64Url(userCredential.publicKey),
