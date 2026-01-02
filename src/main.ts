@@ -75,6 +75,31 @@ async function bootstrap() {
     store,
   });
   app.use(sessionHandler);
+
+  // Get allowed origins from config, or default to common development origins
+  const allowedOrigins = config.get('origin') || process.env.ORIGIN || 'http://localhost,http://localhost:3000';
+  const origins = Array.isArray(allowedOrigins) 
+    ? allowedOrigins 
+    : allowedOrigins.split(',').map((o) => o.trim());
+  
+  // Enable CORS for development
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (origins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Not allowed by CORS: ${origin}`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'User-Agent'],
+  });
+  
   const redisIoAdapter = new RedisIoAdapter(app, sessionHandler);
   await redisIoAdapter.connectToRedis(config);
 

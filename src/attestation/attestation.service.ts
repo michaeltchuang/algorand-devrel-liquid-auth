@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppService } from '../app.service.js';
 import {
@@ -14,15 +14,48 @@ import {
 } from '../encoding/index.js';
 import nacl from 'tweetnacl';
 import { AlgodService } from '../algod/algod.service.js';
+import * as falcon1024 from 'falcon-1024';
+import * as path from 'path';
+import * as fs from 'fs';
+
 @Injectable()
-export class AttestationService {
+export class AttestationService implements OnModuleInit {
   private readonly logger = new Logger(AttestationService.name);
+  private falconModule: any;
   encoder: TextEncoder = new TextEncoder();
   constructor(
     private appService: AppService,
     private algodService: AlgodService,
     private configService: ConfigService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      // Pre-load falcon-1024 module with WASM configuration for Node.js
+      const wasmPath = path.join(process.cwd(), 'node_modules', 'falcon-1024', 'dist', 'falcon_wasm.wasm');
+      
+      // Check if WASM file exists
+      if (!fs.existsSync(wasmPath)) {
+        this.logger.warn(`Falcon-1024 WASM file not found at ${wasmPath}`);
+        return;
+      }
+
+      // Initialize the module with the correct locateFile function
+      this.falconModule = await import('falcon-1024');
+      
+      // Pre-warm the WASM by calling the module initialization
+      const moduleConfig = {
+        locateFile: (file: string) => {
+          return require.resolve(`falcon-1024/dist/${file}`);
+        }
+      };
+      
+      await this.falconModule.default(moduleConfig);
+      this.logger.log('Falcon-1024 WASM module initialized successfully');
+    } catch (error) {
+      this.logger.warn('Failed to pre-load Falcon-1024 module:', error);
+    }
+  }
   async verify(
     algod: AlgodService,
     type: string,
@@ -66,13 +99,14 @@ export class AttestationService {
     } else if (type === 'falcon-1024') {
       // Falcon-1024 post-quantum signature verification
       try {
-        // Lazy load falcon-1024 to avoid WASM loading issues at startup
-        const { verifyCompressed: verifyFalconCompressed } = await import('falcon-1024');
+        if (!this.falconModule) {
+          throw new Error('Falcon-1024 module not initialized');
+        }
         
         const publicKeyBytes = decodeAddress(address);
         
         // Use falcon-1024-ts library for verification
-        const isValid = verifyFalconCompressed(
+        const isValid = this.falconModule.verifyCompressed(
           publicKeyBytes,
           signatureBytes,
           challengeBytes
@@ -93,7 +127,7 @@ export class AttestationService {
         const authPublicKey = decodeAddress(accountInfo['auth-addr']);
 
         // Validate with rekeyed Falcon public key
-        return verifyFalconCompressed(
+        return this.falconModule.verifyCompressed(
           authPublicKey,
           signatureBytes,
           challengeBytes
