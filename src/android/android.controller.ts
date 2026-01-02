@@ -44,12 +44,18 @@ export class AndroidController {
           (al) => al.target.package_name === process.env.ANDROID_PACKAGENAME,
         )
       ) {
+        // Support multiple fingerprints via comma-separated list
+        const fingerprints = process.env.ANDROID_SHA256HASH
+          .split(',')
+          .map(fp => fp.trim())
+          .filter(fp => fp.length > 0);
+        
         additionalEntries.push({
           relation,
           target: {
             namespace: 'android_app',
             package_name: process.env.ANDROID_PACKAGENAME,
-            sha256_cert_fingerprints: [process.env.ANDROID_SHA256HASH],
+            sha256_cert_fingerprints: fingerprints,
           },
         });
       }

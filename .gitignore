@@ -4,7 +4,6 @@ swagger-codegen-cli.jar
 ngrok.yml
 .data
 
-assetlinks.json
 src/views
 src/public
 views
