@@ -182,7 +182,7 @@ export function QrCode({ label = true }: { label?: boolean }) {
                 signedTxnBytes = Uint8Array.from(atob(data.result.stxns[0]), c => c.charCodeAt(0));
                 console.log('✅ Decoded from standard base64, byte length:', signedTxnBytes.length);
               }
-            } else if (data.result.stxns[0] instanceof Uint8Array) {
+            } else if ((data.result.stxns[0] as any) instanceof Uint8Array) {
               // It's already bytes
               signedTxnBytes = data.result.stxns[0];
               console.log('Already Uint8Array, length:', signedTxnBytes.length);
@@ -199,7 +199,7 @@ export function QrCode({ label = true }: { label?: boolean }) {
               // This is just an Ed25519 signature (Algo25 or HdKey case)
               console.log('📝 Received Ed25519 signature (64 bytes), attaching to transaction...');
               console.log('Transaction sender:', _txn.from.toString());
-              console.log('Signature address:', data.result.address);
+              console.log('Signature address:', (data.result as any).address);
               
               // Create a signed transaction object with the signature
               const signedTxn = {
@@ -269,7 +269,7 @@ export function QrCode({ label = true }: { label?: boolean }) {
                 signedTxnBytes = Uint8Array.from(atob(data.result.stxns[0]), c => c.charCodeAt(0));
                 console.log('✅ Decoded from standard base64, byte length:', signedTxnBytes.length);
               }
-            } else if (data.result.stxns[0] instanceof Uint8Array) {
+            } else if ((data.result.stxns[0] as any) instanceof Uint8Array) {
               // It's already bytes
               signedTxnBytes = data.result.stxns[0];
               console.log('Already Uint8Array, length:', signedTxnBytes.length);
@@ -286,7 +286,7 @@ export function QrCode({ label = true }: { label?: boolean }) {
               // This is just an Ed25519 signature (Algo25 or HdKey case)
               console.log('📝 Received Ed25519 signature (64 bytes), attaching to transaction...');
               console.log('Transaction sender:', _txn.from.toString());
-              console.log('Signature address:', data.result.address);
+              console.log('Signature address:', (data.result as any).address);
               
               // Create a signed transaction object with the signature
               const signedTxn = {

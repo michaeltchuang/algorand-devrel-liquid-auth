@@ -24,12 +24,6 @@ COPY --from=BUILDER /home/node/src ./src
 COPY --from=BUILDER /home/node/package.json ./package.json
 COPY --from=BUILDER /home/node/assetlinks.json ./assetlinks.json
 
-# Explicitly copy the falcon WASM file to a location where it can be found
-COPY --from=BUILDER /home/node/node_modules/falcon-1024/dist/falcon_wasm.wasm ./node_modules/falcon-1024/dist/falcon_wasm.wasm
-
-# Set NODE_OPTIONS to allow experimental features if needed
-ENV NODE_OPTIONS="--experimental-wasm-modules"
-
 # Expose the port on which the app will run
 EXPOSE 3000
 

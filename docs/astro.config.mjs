@@ -11,45 +11,10 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 // https://astro.build/config
 export default defineConfig({
   vite: {
-    plugins: [
-      basicSsl(),
-      {
-        name: 'vite-plugin-falcon-wasm',
-        enforce: 'pre',
-        config() {
-          return {
-            build: {
-              assetsInlineLimit: (filePath) => {
-                // Inline the falcon WASM file to avoid loading issues
-                return filePath.includes('falcon_wasm.wasm');
-              },
-            },
-          };
-        },
-      },
-    ],
+    plugins: [basicSsl()],
     server: {
       https: true,
-    },
-    optimizeDeps: {
-      exclude: [
-        '@algorandfoundation/liquid-client',
-        '@algorandfoundation/provider',
-        'falcon-1024'
-      ],
-      include: [
-        // Pre-bundle falcon-1024 to handle WASM correctly
-        'falcon-1024/dist/index.js'
-      ]
-    },
-    ssr: {
-      noExternal: [
-        '@algorandfoundation/liquid-client',
-        '@algorandfoundation/provider',
-        'falcon-1024'
-      ]
-    },
-    assetsInclude: ['**/*.wasm']
+    }
   },
   site: 'https://liquidauth.com',
   trailingSlash: 'never',

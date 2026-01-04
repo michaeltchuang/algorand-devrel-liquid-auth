@@ -14,14 +14,10 @@ import {
 } from '../encoding/index.js';
 import nacl from 'tweetnacl';
 import { AlgodService } from '../algod/algod.service.js';
-import * as falcon1024 from 'falcon-1024';
-import * as path from 'path';
-import * as fs from 'fs';
 
 @Injectable()
-export class AttestationService implements OnModuleInit {
+export class AttestationService {
   private readonly logger = new Logger(AttestationService.name);
-  private falconModule: any;
   encoder: TextEncoder = new TextEncoder();
   constructor(
     private appService: AppService,
@@ -29,33 +25,6 @@ export class AttestationService implements OnModuleInit {
     private configService: ConfigService,
   ) {}
 
-  async onModuleInit() {
-    try {
-      // Pre-load falcon-1024 module with WASM configuration for Node.js
-      const wasmPath = path.join(process.cwd(), 'node_modules', 'falcon-1024', 'dist', 'falcon_wasm.wasm');
-      
-      // Check if WASM file exists
-      if (!fs.existsSync(wasmPath)) {
-        this.logger.warn(`Falcon-1024 WASM file not found at ${wasmPath}`);
-        return;
-      }
-
-      // Initialize the module with the correct locateFile function
-      this.falconModule = await import('falcon-1024');
-      
-      // Pre-warm the WASM by calling the module initialization
-      const moduleConfig = {
-        locateFile: (file: string) => {
-          return require.resolve(`falcon-1024/dist/${file}`);
-        }
-      };
-      
-      await this.falconModule.default(moduleConfig);
-      this.logger.log('Falcon-1024 WASM module initialized successfully');
-    } catch (error) {
-      this.logger.warn('Failed to pre-load Falcon-1024 module:', error);
-    }
-  }
   async verify(
     algod: AlgodService,
     type: string,
@@ -97,22 +66,30 @@ export class AttestationService implements OnModuleInit {
         );
       }
     } else if (type === 'falcon-1024') {
-      // Falcon-1024 post-quantum signature verification
+      // Falcon-1024 post-quantum signature verification via Go microservice
       try {
-        if (!this.falconModule) {
-          throw new Error('Falcon-1024 module not initialized');
-        }
-        
         const publicKeyBytes = decodeAddress(address);
         
-        // Use falcon-1024-ts library for verification
-        const isValid = this.falconModule.verifyCompressed(
-          publicKeyBytes,
-          signatureBytes,
-          challengeBytes
-        );
+        // Call the Falcon verification Go service
+        const falconServiceUrl = this.configService.get<string>('falconServiceUrl') || 'http://localhost:3002';
         
-        if (isValid) return true;
+        const response = await fetch(`${falconServiceUrl}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publicKey: Array.from(publicKeyBytes),
+            signature: Array.from(signatureBytes),
+            message: Array.from(challengeBytes),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Falcon service returned ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.valid) return true;
         
         // Check if the account is rekeyed to another Falcon key
         const accountInfo = await algod
@@ -127,11 +104,22 @@ export class AttestationService implements OnModuleInit {
         const authPublicKey = decodeAddress(accountInfo['auth-addr']);
 
         // Validate with rekeyed Falcon public key
-        return this.falconModule.verifyCompressed(
-          authPublicKey,
-          signatureBytes,
-          challengeBytes
-        );
+        const rekeyResponse = await fetch(`${falconServiceUrl}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publicKey: Array.from(authPublicKey),
+            signature: Array.from(signatureBytes),
+            message: Array.from(challengeBytes),
+          }),
+        });
+
+        if (!rekeyResponse.ok) {
+          return false;
+        }
+
+        const rekeyResult = await rekeyResponse.json();
+        return rekeyResult.valid;
       } catch (error) {
         this.logger.error('Falcon-1024 verification error:', error);
         return false;
