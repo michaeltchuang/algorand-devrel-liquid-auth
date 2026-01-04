@@ -22,13 +22,20 @@ export class AppService {
       const statement = assetLinks.filter(
         (al) => al?.target?.package_name === pkgName,
       );
-      // Get all fingerprints and convert to base64url format for multiple signing keys
-      const androidHashes = statement[0].target.sha256_cert_fingerprints.map(fp => {
-        const octArray: number[] = fp.split(':').map((h) => parseInt(h, 16));
-        return toBase64URL(new Uint8Array(octArray));
-      });
-      // Return all possible origins (handles debug and release builds)
-      origin = androidHashes.map(hash => `android:apk-key-hash:${hash}`);
+      
+      // Check if package is found in assetlinks
+      if (statement.length === 0 || !statement[0]?.target) {
+        this.logger.warn(`Android package ${pkgName} not found in assetlinks.json, falling back to configured origin`);
+        origin = this.configService.get<string>('origin');
+      } else {
+        // Get all fingerprints and convert to base64url format for multiple signing keys
+        const androidHashes = statement[0].target.sha256_cert_fingerprints.map(fp => {
+          const octArray: number[] = fp.split(':').map((h) => parseInt(h, 16));
+          return toBase64URL(new Uint8Array(octArray));
+        });
+        // Return all possible origins (handles debug and release builds)
+        origin = androidHashes.map(hash => `android:apk-key-hash:${hash}`);
+      }
     }
     // Web Origin
     else {

@@ -6,6 +6,7 @@ export default () => ({
   rpName: process.env.RP_NAME || 'Algorand Foundation FIDO2 Server',
   hostname: process.env.HOSTNAME || 'localhost',
   origin: process.env.ORIGIN || 'http://localhost',
+  falconServiceUrl: process.env.FALCON_SERVICE_URL || 'http://localhost:3002',
   session: {
     secure: process.env.SESSION_SECURE === 'true',
     secret: process.env.SESSION_SECRET || 'secret',

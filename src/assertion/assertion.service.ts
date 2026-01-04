@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
@@ -14,6 +14,8 @@ import { fromBase64Url } from '../encoding/index.js';
 
 @Injectable()
 export class AssertionService {
+  private readonly logger = new Logger(AssertionService.name);
+  
   constructor(
     private appService: AppService,
     private configService: ConfigService,
@@ -50,7 +52,18 @@ export class AssertionService {
 
   async response(
     user: User,
-    credential: AuthenticationResponseJSON,
+    credential: AuthenticationResponseJSON & {
+      clientExtensionResults?: {
+        liquid?: {
+          type?: string;
+          signature?: string;
+          address?: string;
+          publicKey?: string;
+          requestId?: string;
+          device?: string;
+        };
+      };
+    },
     challenge: string,
     ua: string,
   ) {
@@ -77,7 +90,65 @@ export class AssertionService {
       },
     });
 
-    const { verified, authenticationInfo } = verification;
+    let { verified } = verification;
+    const { authenticationInfo } = verification;
+
+    // Check for Liquid Extension with Falcon signature
+    const hasLiquidExtension =
+      credential.clientExtensionResults?.liquid?.type === 'falcon-1024' &&
+      credential.clientExtensionResults?.liquid?.signature;
+
+    if (hasLiquidExtension && verified) {
+      this.logger.debug('Verifying Falcon-1024 signature from liquid extension');
+      
+      const falconServiceUrl = this.configService.get('falconServiceUrl') || 'http://localhost:3002';
+      
+      // Use public key from extension if provided, otherwise use stored public key
+      let publicKeyBase64: string;
+      if (credential.clientExtensionResults.liquid.publicKey) {
+        publicKeyBase64 = credential.clientExtensionResults.liquid.publicKey;
+        this.logger.debug('Using Falcon public key from extension');
+      } else {
+        // For Falcon, the stored publicKey should be the full 1793-byte key
+        publicKeyBase64 = userCredential.publicKey;
+        this.logger.debug('Using stored Falcon public key from database');
+      }
+      
+      const publicKeyBytes = fromBase64Url(publicKeyBase64);
+      const signatureBytes = fromBase64Url(credential.clientExtensionResults.liquid.signature);
+      const challengeBytes = fromBase64Url(challenge);
+
+      const verifyRequest = {
+        publicKey: Array.from(publicKeyBytes),
+        signature: Array.from(signatureBytes),
+        message: Array.from(challengeBytes),
+      };
+
+      try {
+        const response = await fetch(`${falconServiceUrl}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyRequest),
+        });
+
+        if (!response.ok) {
+          this.logger.error('Falcon service returned error:', response.status);
+          verified = false;
+        } else {
+          const result = await response.json();
+          verified = result.valid;
+          
+          if (verified) {
+            this.logger.debug('✅ Falcon-1024 signature verified');
+          } else {
+            this.logger.warn('❌ Falcon-1024 signature invalid:', result.error);
+          }
+        }
+      } catch (error) {
+        this.logger.error('Error verifying Falcon signature:', error);
+        verified = false;
+      }
+    }
 
     if (!verified) {
       throw 'User verification failed.';
