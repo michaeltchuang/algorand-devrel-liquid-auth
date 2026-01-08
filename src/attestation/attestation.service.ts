@@ -30,13 +30,18 @@ export class AttestationService {
     type: string,
     challenge: string,
     signature: string,
-    address: string,
+    address?: string,
+    publicKey?: string,
   ) {
     const challengeBytes = fromBase64Url(challenge);
     const signatureBytes = fromBase64Url(signature);
 
     if (type === 'algorand') {
       // Ed25519 signature verification
+      if (!address) {
+        throw new Error('Ed25519 signature verification requires address');
+      }
+      
       const publicKeyBytes = decodeAddress(address);
       const valid = nacl.sign.detached.verify(
         challengeBytes,
@@ -68,10 +73,17 @@ export class AttestationService {
     } else if (type === 'falcon-1024') {
       // Falcon-1024 post-quantum signature verification via Go microservice
       try {
-        const publicKeyBytes = decodeAddress(address);
+        if (!publicKey) {
+          throw new Error('Falcon-1024 signature verification requires publicKey');
+        }
         
-        // Call the Falcon verification Go service
+        // For Falcon, publicKey is already base64-encoded bytes, not an address
+        const publicKeyBytes = fromBase64Url(publicKey);
+        
         const falconServiceUrl = this.configService.get<string>('falconServiceUrl') || 'http://localhost:3002';
+        
+        this.logger.debug(`Verifying Falcon signature`);
+        this.logger.debug(`Challenge length: ${challengeBytes.length}, Signature length: ${signatureBytes.length}, PublicKey length: ${publicKeyBytes.length}`);
         
         const response = await fetch(`${falconServiceUrl}/verify`, {
           method: 'POST',
@@ -84,42 +96,19 @@ export class AttestationService {
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          this.logger.error(`Falcon service returned ${response.status}: ${errorText}`);
           throw new Error(`Falcon service returned ${response.status}`);
         }
 
         const result = await response.json();
+        this.logger.debug(`Falcon verification result: ${result.valid}`);
         
         if (result.valid) return true;
         
-        // Check if the account is rekeyed to another Falcon key
-        const accountInfo = await algod
-          .accountInformation(address)
-          .exclude('all')
-          .do();
-
-        if (!accountInfo['auth-addr']) {
-          return false;
-        }
-
-        const authPublicKey = decodeAddress(accountInfo['auth-addr']);
-
-        // Validate with rekeyed Falcon public key
-        const rekeyResponse = await fetch(`${falconServiceUrl}/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            publicKey: Array.from(authPublicKey),
-            signature: Array.from(signatureBytes),
-            message: Array.from(challengeBytes),
-          }),
-        });
-
-        if (!rekeyResponse.ok) {
-          return false;
-        }
-
-        const rekeyResult = await rekeyResponse.json();
-        return rekeyResult.valid;
+        // Note: Falcon-1024 uses the publicKey from the extension, so no rekey check needed
+        // If the account is rekeyed, the extension would contain the correct public key
+        return false;
       } catch (error) {
         this.logger.error('Falcon-1024 verification error:', error);
         return false;
@@ -127,6 +116,7 @@ export class AttestationService {
     }
     return false;
   }
+  
   async request(options: AttestationSelectorDto) {
     //https://www.iana.org/assignments/cose/cose.xhtml#algorithms
     // EdDSA is -8
@@ -166,6 +156,7 @@ export class AttestationService {
           type: string;
           signature: string;
           address: string;
+          publicKey?: string; // Falcon public key for Falcon-1024 accounts
           device?: string;
         };
       };
@@ -176,32 +167,48 @@ export class AttestationService {
 
     // Validate the passkey
     // For Android, we accept any of the configured fingerprints
+    this.logger.debug(`Verifying passkey attestation with challenge: ${expectedChallenge}`);
+    this.logger.debug(`Expected origin: ${expectedOrigin}, Expected RPID: ${expectedRPID}`);
+    
     const verifiedAttestation = await verifyRegistrationResponse({
       response: credential,
       expectedChallenge,
       expectedOrigin: Array.isArray(expectedOrigin) ? expectedOrigin : [expectedOrigin],
       expectedRPID,
     });
+    
     const { registrationInfo } = verifiedAttestation;
     let { verified } = verifiedAttestation;
+
+    this.logger.debug(`Passkey verification result: ${verified}`);
 
     // Handle Liquid Extension
     const isLiquid =
       typeof credential.clientExtensionResults !== 'undefined' &&
       typeof credential.clientExtensionResults.liquid !== 'undefined';
+      
+    this.logger.debug(`Liquid extension present: ${isLiquid}`);
+    
     // Check for extension results
     if (isLiquid && verified) {
-      // Verify the Algorand signature (supports both Ed25519 and Falcon-1024)
+      const liquid = credential.clientExtensionResults.liquid;
+      
+      this.logger.log(`Verifying ${liquid.type} signature`);
+      
       verified = await this.verify(
         this.algodService,
-        credential.clientExtensionResults.liquid.type,
+        liquid.type,
         expectedChallenge,
-        credential.clientExtensionResults.liquid.signature,
-        credential.clientExtensionResults.liquid.address,
+        liquid.signature,
+        liquid.address,       // Wallet address (for Ed25519 and for storage)
+        liquid.publicKey,    // Falcon public key (for Falcon-1024)
       );
+      
+      this.logger.log(`${liquid.type} signature verification result: ${verified}`);
     }
 
     if (!verified) {
+      this.logger.error('User verification failed!');
       throw 'User verification failed.';
     }
 

@@ -59,6 +59,12 @@ export class AttestationController {
     const attestationOptions = await this.attestationService.request(options);
     // This challenge is used to verify the response
     session.challenge = attestationOptions.challenge;
+    // Force save the session to ensure it persists
+    session.save((err) => {
+      if (err) {
+        this.logger.error('Failed to save session:', err);
+      }
+    });
     // Return the Attestation Options
     this.logger.debug('Attestation Options', attestationOptions);
     return attestationOptions;
