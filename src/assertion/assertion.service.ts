@@ -70,13 +70,19 @@ export class AssertionService {
     const expectedOrigin = this.appService.getOrigin(ua);
     const expectedRPID = this.configService.get('hostname');
 
+    this.logger.log(`🔍 Authentication User-Agent: ${ua}`);
+    this.logger.debug(`Expected origin: ${expectedOrigin}, Expected RPID: ${expectedRPID}`);
+
     const userCredential = user.credentials.find(
       (cred) => cred.credId === credential.id,
     );
 
     if (!userCredential) {
+      this.logger.error('❌ Authenticating credential not found');
       throw 'Authenticating credential not found.';
     }
+    
+    this.logger.debug(`Found credential: ${userCredential.credId.substring(0, 20)}...`);
 
     const verification = await verifyAuthenticationResponse({
       response: credential,
@@ -84,7 +90,7 @@ export class AssertionService {
       expectedOrigin: Array.isArray(expectedOrigin) ? expectedOrigin : [expectedOrigin],
       expectedRPID,
       credential: {
-        publicKey: fromBase64Url(userCredential.publicKey),
+        publicKey: new Uint8Array(fromBase64Url(userCredential.publicKey)),
         counter: userCredential.prevCounter,
         id: userCredential.credId,
       },
@@ -98,8 +104,21 @@ export class AssertionService {
       credential.clientExtensionResults?.liquid?.type === 'falcon-1024' &&
       credential.clientExtensionResults?.liquid?.signature;
 
+    if (credential.clientExtensionResults?.liquid) {
+      const liquid = credential.clientExtensionResults.liquid;
+      this.logger.log(`📱 Liquid Extension Data (Assertion):`, {
+        type: liquid.type,
+        address: liquid.address,
+        hasSignature: !!liquid.signature,
+        signatureLength: liquid.signature?.length || 0,
+        hasPublicKey: !!liquid.publicKey,
+        publicKeyLength: liquid.publicKey?.length || 0,
+        device: liquid.device,
+      });
+    }
+
     if (hasLiquidExtension && verified) {
-      this.logger.debug('Verifying Falcon-1024 signature from liquid extension');
+      this.logger.log('🔐 Verifying Falcon-1024 signature from liquid extension');
       
       const falconServiceUrl = this.configService.get('falconServiceUrl') || 'http://localhost:3002';
       
@@ -124,6 +143,11 @@ export class AssertionService {
         message: Array.from(challengeBytes),
       };
 
+      this.logger.debug(`Calling Falcon service at: ${falconServiceUrl}/verify`);
+      this.logger.debug(`Challenge bytes length: ${challengeBytes.length}`);
+      this.logger.debug(`Signature bytes length: ${signatureBytes.length}`);
+      this.logger.debug(`Public key bytes length: ${publicKeyBytes.length}`);
+
       try {
         const response = await fetch(`${falconServiceUrl}/verify`, {
           method: 'POST',
@@ -132,20 +156,21 @@ export class AssertionService {
         });
 
         if (!response.ok) {
-          this.logger.error('Falcon service returned error:', response.status);
+          const errorText = await response.text();
+          this.logger.error(`❌ Falcon service returned error ${response.status}: ${errorText}`);
           verified = false;
         } else {
           const result = await response.json();
           verified = result.valid;
           
           if (verified) {
-            this.logger.debug('✅ Falcon-1024 signature verified');
+            this.logger.log('✅ Falcon-1024 signature verified successfully');
           } else {
-            this.logger.warn('❌ Falcon-1024 signature invalid:', result.error);
+            this.logger.error(`❌ Falcon-1024 signature invalid: ${result.error || 'Unknown error'}`);
           }
         }
       } catch (error) {
-        this.logger.error('Error verifying Falcon signature:', error);
+        this.logger.error('❌ Error calling Falcon verification service:', error);
         verified = false;
       }
     }

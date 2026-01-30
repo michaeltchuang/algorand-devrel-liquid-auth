@@ -32,7 +32,8 @@
       "package_name": "com.michaeltchuang.walletsdk.demo",
       "sha256_cert_fingerprints": [
         "A7:43:8D:95:D1:FA:D7:68:AE:4F:9F:A8:7B:D5:86:D4:AE:A8:1E:25:BC:52:3D:11:F0:7D:C4:A8:15:BB:71:63",
-        "1C:53:BB:F4:97:1E:63:18:0C:40:5E:54:B5:AF:0B:28:BD:25:F1:4C:32:B1:64:75:0D:2E:E8:DC:65:77:81:75"
+        "1C:53:BB:F4:97:1E:63:18:0C:40:5E:54:B5:AF:0B:28:BD:25:F1:4C:32:B1:64:75:0D:2E:E8:DC:65:77:81:75",
+        "06:20:1E:74:B6:20:C9:74:89:1E:E5:01:8E:1E:5D:3B:C5:4B:EA:8A:B0:EC:72:65:0B:CD:0A:67:F7:4A:72:FF"
       ]
     }
   }

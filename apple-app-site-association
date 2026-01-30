@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8W2L568H7X.com.michaeltchuang.walletsdk.demo",
+        "paths": [ "*" ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [ "8W2L568H7X.com.michaeltchuang.walletsdk.demo" ]
+  }
+}

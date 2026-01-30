@@ -17,10 +17,10 @@
     }
   },
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && node bin/copy-well-known.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "dev": "NODE_OPTIONS='--experimental-wasm-modules' nest start --watch",
+    "dev": "node bin/copy-well-known.js && NODE_OPTIONS='--experimental-wasm-modules' nest start --watch",
     "start:debug": "cross-env NODE_ENV=development NODE_OPTIONS='--experimental-wasm-modules' nest start --debug --watch",
     "start:prod": "node --experimental-wasm-modules dist/src/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
@@ -45,7 +45,7 @@
     "@nestjs/websockets": "^11.0.12",
     "@sentry/node": "^7.74.1",
     "@sentry/profiling-node": "^1.2.1",
-    "@simplewebauthn/server": "^13.1.1",
+    "@simplewebauthn/server": "^13.2.2",
     "@socket.io/redis-adapter": "^8.2.1",
     "algosdk": "^2.7.0",
     "base64url": "^3.0.1",
