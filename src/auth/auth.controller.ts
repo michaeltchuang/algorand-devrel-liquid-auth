@@ -86,7 +86,7 @@ export class AuthController {
     delete session.wallet;
     delete session.active;
     delete session.requestId;
-    res.redirect(302, '/');
+    res.status(200).json({ success: true });
   }
   /**
    * Read Session
